@@ -1,21 +1,22 @@
 program NonStickMouse;  { http://www.jawfin.net/nsm }
 (* Developed by Jonathan Barton to counter sticky corners and edges in Windows 10
-   Original: 25th November, 2015   Current: 12th December, 2015
+   Original: 25th November, 2015   Current: 2nd December, 2016
    This app checks the mouse position 1000 times a second and moves it onto the
      next monitor when it is found to be stuck in a corner or on an edge.
+   02/12/2016: Added stochastic ability. Also some code streamlining.
    This mouse... is clean.                                                       *)
 
 uses
-  Forms, Windows, Controls;
+  Forms, Windows, Controls, SysUtils;
 
 var //save runtime stack & other overheads via global vars instead of passed params
   prev:TPoint; //stores where the mouse was last frame, so we can see what direction it's moving in
-  reentry:boolean; //prevent reentry: has sleeps in an event timer. this could also be a typed constant
+  reentry:boolean; //prevent reentry of timer callback
 
 procedure TimerCallback(hwnd:HWND;uMsg:UINT;idEvent:UINT_PTR;dwTime:DWORD);stdcall;
 const      //range is how far to move the mouse to get it outside the trapment zones -
-  range=9; //8px should do it, but Win10 can still think it's in the corner, even when
-var        // its visible on the next monitor! - so 9 pops past that barrier too
+  range=7; //8px should do it, but Win10 can still think it's in the corner, even when
+var        // its visible on the next monitor! - now it just takes 7 pops past that barrier
   pt:TPoint;  //where the mouse is, and where it's going to be!
   m:TMonitor; //for quick access to the active monitor's dimensions
 
@@ -44,7 +45,7 @@ var        // its visible on the next monitor! - so 9 pops past that barrier too
   end; //End CanMove
 
  begin //Begin CheckForMove
-   result:=false; //corner checks: check diagonal then horizonal then vertical.
+   //corner checks: check diagonal then horizonal then vertical.
    br:=m.BoundsRect; //check corners first, then edges.
    if (pt.X=br.Left) and (pt.Y=br.Top) then //top-left
    begin
@@ -104,13 +105,15 @@ var        // its visible on the next monitor! - so 9 pops past that barrier too
    if (pt.y=br.Bottom-1) and (prev.y<=pt.y) then //bottom edge and moving down
    begin
      result:=CanMove(pt.x,br.Bottom-1+range);
-     exit; //it's going to exit anyway, just programming politeness
+     exit;
    end;
+   //stochastic ability: it's not stuck in any corner, but see if it's approaching one
+   result:=CanMove(pt.X*2-prev.X,pt.Y*2-prev.Y); //on it's given trajectory, will it cross a monitor?
  end; //End CheckForMove
 
 begin //Begin TimerCallback
   if reentry then //one at a time please
-    exit;
+    exit;         //ASSERT: Shouldn't happen, but I don't trust the poll enough to not check
   reentry:=true;
   try
     pt:=Mouse.CursorPos; //vars used in CheckForMove above too
@@ -118,11 +121,7 @@ begin //Begin TimerCallback
     if m=nil then //Danger, danger, Will Robinson.
       exit; //note: the finally block still executes
     if CheckForMove then //draws from pt & m, and sets new pt if moving
-    begin
-      sleep(10); //stop Win10 interfering
-      SetCursorPos(pt.X,pt.Y); //something about the whole point of this application
-      sleep(10); //need this too..
-    end;
+      SetCursorPos(pt.X,pt.Y); //something about the whole point of this application!
     prev:=pt; //our current point, whether its original or where we placed it is stored
   finally //user locked screen / logged out? or just some random unhappiness
     reentry:=false;
@@ -141,4 +140,5 @@ begin //main code, program starts here, contains main loop
     TranslateMessage(Msg);
     DispatchMessage(Msg);
   end;
-end.
+end. //End program
+
