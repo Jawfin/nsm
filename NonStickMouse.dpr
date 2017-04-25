@@ -1,9 +1,13 @@
 program NonStickMouse;  { http://www.jawfin.net/nsm }
 (* Developed by Jonathan Barton to counter sticky corners and edges in Windows 10
-   Original: 25th November, 2015   Current: 2nd December, 2016
+   Original: 25th November, 2015
    This app checks the mouse position 1000 times a second and moves it onto the
      next monitor when it is found to be stuck in a corner or on an edge.
-   02/12/2016: Added stochastic ability. Also some code streamlining.
+   2nd December, 2016: -
+        Added stochastic ability. Also some code streamlining.
+   25th April, 2017: -
+        [hoplimit] Locked firing range of stochastic (thus oxymoron!)
+        Fixed bug in handling lookahead, it should have priority of all checks
    This mouse... is clean.                                                       *)
 
 uses
@@ -15,8 +19,10 @@ var //save runtime stack & other overheads via global vars instead of passed par
 
 procedure TimerCallback(hwnd:HWND;uMsg:UINT;idEvent:UINT_PTR;dwTime:DWORD);stdcall;
 const      //range is how far to move the mouse to get it outside the trapment zones -
-  range=7; //8px should do it, but Win10 can still think it's in the corner, even when
-var        // its visible on the next monitor! - now it just takes 7 pops past that barrier
+  range=8; //8px should do it, but Win10 can still think it's in the corner, even when
+           // its visible on the next monitor! - now it just takes 8 pops past that barrier
+  hoplimit=30; //if delta greater than this in 1ms then is either computer controlled or will hop anyway!
+var
   pt:TPoint;  //where the mouse is, and where it's going to be!
   m:TMonitor; //for quick access to the active monitor's dimensions
 
@@ -45,6 +51,12 @@ var        // its visible on the next monitor! - now it just takes 7 pops past t
   end; //End CanMove
 
  begin //Begin CheckForMove
+   //stochastic ability: it's not stuck in any corner, but see if it's approaching one
+   result:=(pt.X-prev.X>-hoplimit) and (pt.X-prev.X<hoplimit) and //limit hop check range
+           (pt.Y-prev.Y>-hoplimit) and (pt.Y-prev.Y<hoplimit) and // note short-circuit faster than abs()
+           CanMove(pt.X*2-prev.X,pt.Y*2-prev.Y); //on it's given trajectory, will it cross a monitor?
+   if result then //the check above will now cover almost all hops, but keep rest of code for completeness
+     exit;
    //corner checks: check diagonal then horizonal then vertical.
    br:=m.BoundsRect; //check corners first, then edges.
    if (pt.X=br.Left) and (pt.Y=br.Top) then //top-left
@@ -107,8 +119,6 @@ var        // its visible on the next monitor! - now it just takes 7 pops past t
      result:=CanMove(pt.x,br.Bottom-1+range);
      exit;
    end;
-   //stochastic ability: it's not stuck in any corner, but see if it's approaching one
-   result:=CanMove(pt.X*2-prev.X,pt.Y*2-prev.Y); //on it's given trajectory, will it cross a monitor?
  end; //End CheckForMove
 
 begin //Begin TimerCallback
