@@ -8,130 +8,81 @@ program NonStickMouse;  { http://www.jawfin.net/nsm }
    25th April, 2017: -
         [hoplimit] Locked firing range of stochastic (thus oxymoron!)
         Fixed bug in handling lookahead, it should have priority of all checks
-   This mouse... is clean.                                                       *)
+   7th July, 2017: -
+        Removed significant chunks of code when it was noticed the stochastic
+         approach is all that's needed.  In fact, the legacy code was causing
+         re-hops (flicking back to first montitor) - not wanted or required!
+
+   This mouse... is clean.                                                      *)
 
 uses
-  Forms, Windows, Controls, SysUtils;
+  Forms, Windows, Controls;
 
 var //save runtime stack & other overheads via global vars instead of passed params
   prev:TPoint; //stores where the mouse was last frame, so we can see what direction it's moving in
   reentry:boolean; //prevent reentry of timer callback
 
 procedure TimerCallback(hwnd:HWND;uMsg:UINT;idEvent:UINT_PTR;dwTime:DWORD);stdcall;
-const      //range is how far to move the mouse to get it outside the trapment zones -
-  range=8; //8px should do it, but Win10 can still think it's in the corner, even when
-           // its visible on the next monitor! - now it just takes 8 pops past that barrier
+const
   hoplimit=30; //if delta greater than this in 1ms then is either computer controlled or will hop anyway!
+  range=8; //how close it is to the corner to check for hop (now only applies when over hop limit)
 var
   pt:TPoint;  //where the mouse is, and where it's going to be!
   m:TMonitor; //for quick access to the active monitor's dimensions
 
- function CheckForMove:boolean; //returns true when mouse has to move
- {Pre:: m:TMonitor; is initialised
+ function CanMove(x,y:integer):boolean;      //Tests if the new coords are sound,
+{Pre:: m:TMonitor; is initialised            // on a new screen, and sets pt if it is.
  Post:: pt:TPoint; holds new mouse position}
  var
-   br:TRect; //just an alias really
+   dp:TPoint; //storage of potential destination
+   dm:TMonitor; //destination monitor, if exists and not same as current monitor
+ begin
+   result:=false; //fails until proven true
+   dp.X:=x; dp.Y:=y;
+   dm:=Screen.MonitorFromPoint(dp); //now this will return the closest monitor,
+   if dm<>nil then // whereas i also want to know if it really is on that screen
+     if dm.MonitorNum<>m.MonitorNum then //new point is on another monitor, so move there
+       if (x>=dm.BoundsRect.Left) and (x<dm.BoundsRect.Right) and //if it is within that screen's bounds
+          (y>=dm.BoundsRect.Top) and (y<dm.BoundsRect.Bottom) then //this is needed to check for true diag hop
+       begin
+         pt:=dp;
+         result:=true;
+       end;
+ end; //End CanMove
 
-  function CanMove(x,y:integer):boolean; //tests if the new coords are sound,
-  var                                    // on a new screen, and sets pt if it is
-    dp:TPoint; //storage of potential destination
-    dm:TMonitor; //destination monitor, if exists and not same as current monitor
-  begin
-    result:=false; //fails until proven true
-    dp.X:=x; dp.Y:=y;
-    dm:=Screen.MonitorFromPoint(dp); //now this will return the closest monitor,
-    if dm<>nil then // whereas i also want to know if it really is on that screen
-      if dm.MonitorNum<>m.MonitorNum then //new point is on another monitor, so move there
-        if (x>=dm.BoundsRect.Left) and (x<dm.BoundsRect.Right) and //if it is within that screen's bounds
-           (y>=dm.BoundsRect.Top) and (y<dm.BoundsRect.Bottom) then //this is needed to check for true diag hop
-        begin
-          pt:=dp;
-          result:=true;
-        end;
-  end; //End CanMove
-
- begin //Begin CheckForMove
-   //stochastic ability: it's not stuck in any corner, but see if it's approaching one
-   result:=(pt.X-prev.X>-hoplimit) and (pt.X-prev.X<hoplimit) and //limit hop check range
-           (pt.Y-prev.Y>-hoplimit) and (pt.Y-prev.Y<hoplimit) and // note short-circuit faster than abs()
-           CanMove(pt.X*2-prev.X,pt.Y*2-prev.Y); //on it's given trajectory, will it cross a monitor?
-   if result then //the check above will now cover almost all hops, but keep rest of code for completeness
-     exit;
-   //corner checks: check diagonal then horizonal then vertical.
-   br:=m.BoundsRect; //check corners first, then edges.
-   if (pt.X=br.Left) and (pt.Y=br.Top) then //top-left
-   begin
-     result:=CanMove(br.Left-range,br.Top-range); //check diagonal hop first
-     if not result then
-       if prev.X>=pt.X then //moving left
-         result:=CanMove(br.Left-range,br.Top+range)
-       else if prev.Y>=pt.Y then //moving up
-         result:=CanMove(br.Left+range,br.Top-range);
-     exit; //whether found or not, as this condition was true then all below cannot be
-   end;
-   if (pt.X=br.Right-1) and (pt.Y=br.Top) then //top-right
-   begin //code logic repeated as above
-     result:=CanMove(br.Right-1+range,br.Top-range);
-     if not result then
-       if prev.X<=pt.X then //moving right
-         result:=CanMove(br.Right-1+range,br.Top+range)
-       else if prev.Y>=pt.Y then //moving up
-         result:=CanMove(br.Right-1-range,br.Top-range);
-     exit; //save CPU cycles, the quicker we escape this code-block the better
-   end;
-   if (pt.X=br.Left) and (pt.Y=br.Bottom-1) then //bottom-left
-   begin
-     result:=CanMove(br.Left-range,br.Bottom-1+range);
-     if not result then
-       if prev.X>=pt.X then //moving left
-         result:=CanMove(br.Left-range,br.Bottom-range)
-       else if prev.Y<=pt.Y then //moving down
-         result:=CanMove(br.Left+range,br.Bottom-1+range);
-     exit;
-   end;
-   if (pt.X=br.Right-1) and (pt.Y=br.Bottom-1) then //bottom-right
-   begin
-     result:=CanMove(br.Right-1+range,br.Bottom-1+range);
-     if not result then
-       if prev.X<=pt.X then //moving right
-         result:=CanMove(br.Right-1+range,br.Bottom-1-range)
-       else if prev.Y<=pt.Y then //moving down
-         result:=CanMove(br.Right-1-range,br.Bottom-1+range);
-     exit;
-   end; //end of all corner checks, now to check edges
-   if (pt.x=br.Right-1) and (prev.x<=pt.x) then //right edge and moving right
-   begin //i am not checking if the mouse is dragging a window, just hop it anyway!
-     result:=CanMove(br.Right-1+range,pt.y);
-     exit;
-   end; //note this code could be done with a list of "if then else" - but harder to read even if shorter
-   if (pt.x=br.Left) and (prev.x>=pt.x) then //left edge and moving left
-   begin
-     result:=CanMove(br.Left-range,pt.y);
-     exit;
-   end;
-   if (pt.y=br.Top) and (prev.y>=pt.y) then //top edge and moving up
-   begin
-     result:=CanMove(pt.x,br.Top-range);
-     exit;
-   end;
-   if (pt.y=br.Bottom-1) and (prev.y<=pt.y) then //bottom edge and moving down
-   begin
-     result:=CanMove(pt.x,br.Bottom-1+range);
-     exit;
-   end;
- end; //End CheckForMove
+var //declared here so not accidently used in CanMove()
+  doCheck:boolean; //not really needed, but adds to speed and lowers overhead
+  br:TRect; //just an alias really
 
 begin //Begin TimerCallback
   if reentry then //one at a time please
     exit;         //ASSERT: Shouldn't happen, but I don't trust the poll enough to not check
   reentry:=true;
   try
-    pt:=Mouse.CursorPos; //vars used in CheckForMove above too
+    pt:=Mouse.CursorPos; //vars used in nested CanMove() above too
+    if (pt.X=prev.X) and (pt.Y=prev.Y) then //not moving, don't check any further
+      exit;  //note: the finally block still executes
     m:=Screen.MonitorFromPoint(pt);
     if m=nil then //Danger, danger, Will Robinson.
-      exit; //note: the finally block still executes
-    if CheckForMove then //draws from pt & m, and sets new pt if moving
-      SetCursorPos(pt.X,pt.Y); //something about the whole point of this application!
+      exit;       //Lost in Space! Our only hope now is Dr. Smith!!
+    doCheck:=(pt.X-prev.X>-hoplimit) and (pt.X-prev.X<hoplimit) and //limit hop check range
+             (pt.Y-prev.Y>-hoplimit) and (pt.Y-prev.Y<hoplimit);
+    if not doCheck then //out of hop range, check for near corner
+    begin
+      br:=m.BoundsRect; //for checking the corners (if over hop limit but jammed)
+      doCheck:=
+        ( (pt.X>=br.Left)     and (pt.X<=br.Left+range)    and //checking same screen an very near a corner
+          (pt.Y>=br.Top)      and (pt.Y<=br.Top+range)         ) or //top left
+        ( (pt.X<=br.Right-1)  and (pt.X>=br.Right-1-range) and //1st check is same screen, 2nd is the range
+          (pt.Y>=br.Top)      and (pt.Y<=br.Top+range)         ) or //top right
+        ( (pt.X>=br.Left)     and (pt.X<=br.Left+range)    and
+          (pt.Y<=br.Bottom-1) and (pt.Y>=br.Bottom-1-range)    ) or //bottom left
+        ( (pt.X<=br.Right-1)  and (pt.X>=br.Right-1-range) and
+          (pt.Y<=br.Bottom-1) and (pt.Y>=br.Bottom-1-range)    );   //bottom right
+    end;
+    if doCheck then //either under hop range or near a corner, now check trajectory
+      if CanMove(pt.X*2-prev.X,pt.Y*2-prev.Y) then //draws from pt & m, and sets new pt if moving
+        SetCursorPos(pt.X,pt.Y); //something about the whole point of this application!
     prev:=pt; //our current point, whether its original or where we placed it is stored
   finally //user locked screen / logged out? or just some random unhappiness
     reentry:=false;
