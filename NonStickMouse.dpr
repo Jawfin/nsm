@@ -16,11 +16,16 @@ This app checks the mouse position 1000 times a second and moves it onto the
      Noted that a nested procedure was now only called once, so moved that
       into the body, makes code and overhead less.
      Removed range check on corner detection, and extended it to just edges.
+9th July, 2017: -
+     Twice in one day!
+     Big rewrite, removed "heavy" units: Forms & Controls.
+     Introduced unit MultiMon, and re-wrote code to use this.
+     The execuable dropped from 792 KB to 31 KB!
 
 This mouse... is clean.                                                       *)
 
 uses
-  Forms, Windows, Controls;
+  Windows, MultiMon;
 
 var //save runtime stack & other overheads via global vars instead of passed params
   prev:TPoint; //stores where the mouse was last frame, so we can see what direction it's moving in
@@ -31,39 +36,41 @@ const
   hoplimit=30; //if delta greater than this in 1ms then is either computer controlled or will hop anyway!
 var
   pt:TPoint;  //where the mouse is, and where it's going to be!
-  m:TMonitor; //for quick access to the active monitor's dimensions
+  m:HMONITOR; //for quick access to the active monitor's dimensions
   doCheck:boolean; //not really needed, but adds to speed and lowers overhead
   dp:TPoint; //storage of potential destination
-  dm:TMonitor; //destination monitor, if exists and not same as current monitor
+  mi:TMonitorInfo;  //get info for monitor's bounds
+  dm:HMONITOR; //destination monitor, if exists and not same as current monitor
 begin //Begin TimerCallback
   if reentry then //one at a time please
     exit;         //ASSERT: Shouldn't happen, but I don't trust the poll enough to not check
   reentry:=true;
   try
-    pt:=Mouse.CursorPos; //get where our mouse is now
-    if (pt.X=prev.X) and (pt.Y=prev.Y) then //not moving, don't check any further
+    GetCursorPos(pt); //get where our mouse is now
+    if (pt.X=prev.X) and (pt.Y=prev.Y) then //mouse not moving, don't check any further
       exit;  //note: the finally block still executes
-    m:=Screen.MonitorFromPoint(pt); //what monitor our mouse is on?
-    if m=nil then //Danger, danger, Will Robinson.
-      exit;       //Lost in Space! Our only hope now is Dr. Smith!!
+    m:=MonitorFromPoint(pt,MONITOR_DEFAULTTONULL); //what monitor our mouse is on?
+    if m=0 then //Danger, danger, Will Robinson.
+      exit;     // our mouse is Lost in Space!
     doCheck:=(pt.X-prev.X>-hoplimit) and (pt.X-prev.X<hoplimit) and //limit hop check range
              (pt.Y-prev.Y>-hoplimit) and (pt.Y-prev.Y<hoplimit);
     if not doCheck then //out of hop range, check for near edges
-      doCheck:=(pt.X=m.BoundsRect.Left) or (pt.Y=m.BoundsRect.Top) or //left & top
-               (pt.X=m.BoundsRect.Right-1) or (pt.Y=m.BoundsRect.Bottom-1); //right & bottom
-    if doCheck then //either under hop range or near an edge, now check trajectory
     begin
-      dp.X:=pt.X*2-prev.X; //linear projected coordinate on current movement
+      mi.cbSize:=SizeOf(mi); //prepare destination data for next call
+      GetMonitorInfo(m,@mi); //get the bounds rectangle for the monitor
+      doCheck:=(pt.X=mi.rcMonitor.Left) or (pt.Y=mi.rcMonitor.Top) or //left & top
+               (pt.X=mi.rcMonitor.Right-1) or (pt.Y=mi.rcMonitor.Bottom-1); //right & bottom
+    end;
+    if doCheck then //either under hop range or on an edge
+    begin
+      dp.X:=pt.X*2-prev.X; //linear projected coordinate of current trajectory
       dp.Y:=pt.Y*2-prev.Y;
-      dm:=Screen.MonitorFromPoint(dp); //what monitor is the projection on?
-      if dm<>nil then
-         if dm.MonitorNum<>m.MonitorNum then //different to our current monitor?
-           if (dp.X>=dm.BoundsRect.Left) and (dp.X<dm.BoundsRect.Right) and //within that screen's bounds?
-              (dp.Y>=dm.BoundsRect.Top) and (dp.Y<dm.BoundsRect.Bottom) then //needed for true diag hop
-           begin
-             pt:=dp; //we want to be here!
-             SetCursorPos(pt.X,pt.Y); //something about the whole point of this application!
-           end;
+      dm:=MonitorFromPoint(dp,MONITOR_DEFAULTTONULL); //what monitor is the projection on?
+      if (dm<>0) and (dm<>m) then //valid monitor and different to our current monitor
+      begin
+        pt:=dp; //we want to be here!
+        SetCursorPos(pt.X,pt.Y); //something about the whole point of this application!
+      end;
     end;
     prev:=pt; //our current point, whether its original or where we placed it, is stored
   finally //user locked screen / logged out? or just some random unhappiness
