@@ -33,7 +33,6 @@ var
   pt:TPoint;  //where the mouse is, and where it's going to be!
   m:TMonitor; //for quick access to the active monitor's dimensions
   doCheck:boolean; //not really needed, but adds to speed and lowers overhead
-  br:TRect; //just an alias really
   dp:TPoint; //storage of potential destination
   dm:TMonitor; //destination monitor, if exists and not same as current monitor
 begin //Begin TimerCallback
@@ -50,14 +49,8 @@ begin //Begin TimerCallback
     doCheck:=(pt.X-prev.X>-hoplimit) and (pt.X-prev.X<hoplimit) and //limit hop check range
              (pt.Y-prev.Y>-hoplimit) and (pt.Y-prev.Y<hoplimit);
     if not doCheck then //out of hop range, check for near edges
-    begin
-      br:=m.BoundsRect; //for checking edges (if over hop limit but jammed)
-      doCheck:= //is only made when hop fails, so is high trajectory mouse! prevents misfire
-        ( (pt.X=br.Left)     and (pt.X=br.Left)     ) or //left edge
-        ( (pt.Y=br.Top)      and (pt.Y=br.Top)      ) or //top edge
-        ( (pt.X=br.Right-1)  and (pt.X=br.Right-1)  ) or //right edge
-        ( (pt.Y=br.Bottom-1) and (pt.Y=br.Bottom-1) );   //bottom edge
-    end;
+      doCheck:=(pt.X=m.BoundsRect.Left) or (pt.Y=m.BoundsRect.Top) or //left & top
+               (pt.X=m.BoundsRect.Right-1) or (pt.Y=m.BoundsRect.Bottom-1); //right & bottom
     if doCheck then //either under hop range or near an edge, now check trajectory
     begin
       dp.X:=pt.X*2-prev.X; //linear projected coordinate on current movement
