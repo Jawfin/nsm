@@ -21,6 +21,10 @@ This app checks the mouse position 1000 times a second and moves it onto the
      Big rewrite, removed "heavy" units: Forms & Controls.
      Introduced unit MultiMon, and re-wrote code to use this.
      The execuable dropped from 792 KB to 31 KB!
+10th July, 2017: -
+     Newer approach killed diagonal only monitors.
+     Merged older code with newer units to compensate.
+     Code is again more complex, but it works!
 
 This mouse... is clean.                                                       *)
 
@@ -32,47 +36,122 @@ var //save runtime stack & other overheads via global vars instead of passed par
   reentry:boolean; //prevent reentry of timer callback
 
 procedure TimerCallback(hwnd:HWND;uMsg:UINT;idEvent:UINT_PTR;dwTime:DWORD);stdcall;
-const
+const      //range is how far to move the mouse to get it outside the trapment zones -
+  range=1; //Used to add to potential mouse position, as low as possible to check for kop
   hoplimit=30; //if delta greater than this in 1ms then is either computer controlled or will hop anyway!
 var
   pt:TPoint;  //where the mouse is, and where it's going to be!
   m:HMONITOR; //for quick access to the active monitor's dimensions
-  doCheck:boolean; //not really needed, but adds to speed and lowers overhead
-  dp:TPoint; //storage of potential destination
-  mi:TMonitorInfo;  //get info for monitor's bounds
-  dm:HMONITOR; //destination monitor, if exists and not same as current monitor
+
+ function CheckForMove:boolean; //returns true when mouse has to move
+ {Pre:: m:HMONITOR; is initialised
+ Post:: pt:TPoint; holds new mouse position}
+ var
+   mi:TMonitorInfo;  //get info for monitor's bounds
+   br:TRect; //just an alias really
+
+  function CanMove(x,y:integer):boolean; //tests if the new coords are sound,
+  var                                    // on a new screen, and sets pt if it is
+    dp:TPoint; //storage of potential destination
+    dm:HMONITOR; //destination monitor, if exists and not same as current monitor
+  begin
+    result:=false; //fails until proven true
+    dp.X:=x; dp.Y:=y;
+    dm:=MonitorFromPoint(dp,MONITOR_DEFAULTTONULL); //what monitor is the projection on?
+    if (dm<>0) and (dm<>m) then //valid monitor and different to our current monitor
+    begin
+      pt:=dp; //we want to be here!
+      result:=true;
+    end;
+  end; //End CanMove
+
+ begin //Begin CheckForMove
+   //stochastic ability: it's not stuck in any corner, but see if it's approaching one
+   result:=(pt.X-prev.X>-hoplimit) and (pt.X-prev.X<hoplimit) and //limit hop check range
+           (pt.Y-prev.Y>-hoplimit) and (pt.Y-prev.Y<hoplimit) and // note short-circuit faster than abs()
+           CanMove(pt.X*2-prev.X,pt.Y*2-prev.Y); //on it's given trajectory, will it cross a monitor?
+   if result then //the check above will now cover almost all hops, but keep rest of code for completeness
+     exit;
+   //corner checks: check diagonal then horizonal then vertical.
+   mi.cbSize:=SizeOf(mi); //prepare destination data for next call
+   GetMonitorInfo(m,@mi); //get the bounds rectangle for the monitor
+   br:=mi.rcMonitor; //check corners first, then edges.
+   if (pt.X=br.Left) and (pt.Y=br.Top) then //top-left
+   begin
+     result:=CanMove(br.Left-range,br.Top-range); //check diagonal hop first
+     if not result then
+       if prev.X>=pt.X then //moving left
+         result:=CanMove(br.Left-range,br.Top+range)
+       else if prev.Y>=pt.Y then //moving up
+         result:=CanMove(br.Left+range,br.Top-range);
+     exit; //whether found or not, as this condition was true then all below cannot be
+   end;
+   if (pt.X=br.Right-1) and (pt.Y=br.Top) then //top-right
+   begin //code logic repeated as above
+     result:=CanMove(br.Right-1+range,br.Top-range);
+     if not result then
+       if prev.X<=pt.X then //moving right
+         result:=CanMove(br.Right-1+range,br.Top+range)
+       else if prev.Y>=pt.Y then //moving up
+         result:=CanMove(br.Right-1-range,br.Top-range);
+     exit; //save CPU cycles, the quicker we escape this code-block the better
+   end;
+   if (pt.X=br.Left) and (pt.Y=br.Bottom-1) then //bottom-left
+   begin
+     result:=CanMove(br.Left-range,br.Bottom-1+range);
+     if not result then
+       if prev.X>=pt.X then //moving left
+         result:=CanMove(br.Left-range,br.Bottom-range)
+       else if prev.Y<=pt.Y then //moving down
+         result:=CanMove(br.Left+range,br.Bottom-1+range);
+     exit;
+   end;
+   if (pt.X=br.Right-1) and (pt.Y=br.Bottom-1) then //bottom-right
+   begin
+     result:=CanMove(br.Right-1+range,br.Bottom-1+range);
+     if not result then
+       if prev.X<=pt.X then //moving right
+         result:=CanMove(br.Right-1+range,br.Bottom-1-range)
+       else if prev.Y<=pt.Y then //moving down
+         result:=CanMove(br.Right-1-range,br.Bottom-1+range);
+     exit;
+   end; //end of all corner checks, now to check edges
+   if (pt.x=br.Right-1) and (prev.x<=pt.x) then //right edge and moving right
+   begin //i am not checking if the mouse is dragging a window, just hop it anyway!
+     result:=CanMove(br.Right-1+range,pt.y);
+     exit;
+   end; //note this code could be done with a list of "if then else" - but harder to read even if shorter
+   if (pt.x=br.Left) and (prev.x>=pt.x) then //left edge and moving left
+   begin
+     result:=CanMove(br.Left-range,pt.y);
+     exit;
+   end;
+   if (pt.y=br.Top) and (prev.y>=pt.y) then //top edge and moving up
+   begin
+     result:=CanMove(pt.x,br.Top-range);
+     exit;
+   end;
+   if (pt.y=br.Bottom-1) and (prev.y<=pt.y) then //bottom edge and moving down
+   begin
+     result:=CanMove(pt.x,br.Bottom-1+range);
+     exit;
+   end;
+ end; //End CheckForMove
+
 begin //Begin TimerCallback
   if reentry then //one at a time please
     exit;         //ASSERT: Shouldn't happen, but I don't trust the poll enough to not check
   reentry:=true;
   try
-    GetCursorPos(pt); //get where our mouse is now
+    GetCursorPos(pt); //get where our mouse is now, var used in CheckForMove above too
     if (pt.X=prev.X) and (pt.Y=prev.Y) then //mouse not moving, don't check any further
       exit;  //note: the finally block still executes
     m:=MonitorFromPoint(pt,MONITOR_DEFAULTTONULL); //what monitor our mouse is on?
     if m=0 then //Danger, danger, Will Robinson.
-      exit;     // our mouse is Lost in Space!
-    doCheck:=(pt.X-prev.X>-hoplimit) and (pt.X-prev.X<hoplimit) and //limit hop check range
-             (pt.Y-prev.Y>-hoplimit) and (pt.Y-prev.Y<hoplimit);
-    if not doCheck then //out of hop range, check for near edges
-    begin
-      mi.cbSize:=SizeOf(mi); //prepare destination data for next call
-      GetMonitorInfo(m,@mi); //get the bounds rectangle for the monitor
-      doCheck:=(pt.X=mi.rcMonitor.Left) or (pt.Y=mi.rcMonitor.Top) or //left & top
-               (pt.X=mi.rcMonitor.Right-1) or (pt.Y=mi.rcMonitor.Bottom-1); //right & bottom
-    end;
-    if doCheck then //either under hop range or on an edge
-    begin
-      dp.X:=pt.X*2-prev.X; //linear projected coordinate of current trajectory
-      dp.Y:=pt.Y*2-prev.Y;
-      dm:=MonitorFromPoint(dp,MONITOR_DEFAULTTONULL); //what monitor is the projection on?
-      if (dm<>0) and (dm<>m) then //valid monitor and different to our current monitor
-      begin
-        pt:=dp; //we want to be here!
-        SetCursorPos(pt.X,pt.Y); //something about the whole point of this application!
-      end;
-    end;
-    prev:=pt; //our current point, whether its original or where we placed it, is stored
+      exit; //note: the finally block still executes
+    if CheckForMove then //draws from pt & m, and sets new pt if moving
+      SetCursorPos(pt.X,pt.Y); //something about the whole point of this application!
+    prev:=pt; //our current point, whether its original or where we placed it is stored
   finally //user locked screen / logged out? or just some random unhappiness
     reentry:=false;
   end;
