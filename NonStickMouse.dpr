@@ -30,7 +30,6 @@ This app checks the mouse position 1000 times a second and moves it onto the
      CPU usage is now about a 10th of what it was, if that!
      Rewrote the checking code, getting a tad more speed out of it.
      Also fixed a minor bug in the corner checking!
-     Still hope the less resources I use the less chance it get flagged as a virus...
 
 This mouse... is clean.                                                       *)
 
@@ -41,8 +40,9 @@ var //save runtime stack & other overheads via global vars instead of passed par
   prev:TPoint; //stores where the mouse was last frame, so we can see what direction it's moving in
 
 procedure CheckMouse;
-const      //range is how far to move the mouse to get it outside the trapment zones -
+const
   hoplimit=30; //if delta greater than this in 1ms then is either computer controlled or will hop anyway!
+  range:integer=2; //casting about from mouse position this number of pixels
 var
   pt:TPoint;  //where the mouse is, and where it's going to be!
   m:HMONITOR; //for quick access to the active monitor's dimensions
@@ -85,66 +85,66 @@ var
    begin
      if pt.X=br.Left then //top-left
      begin
-       result:=CanMove(br.Left-1,br.Top-1); //check diagonal hop first
+       result:=CanMove(br.Left-range,br.Top-range); //check diagonal hop first
        if not result then
          if prev.X>=pt.X then //moving left
-           result:=CanMove(br.Left-1,br.Top+1);
+           result:=CanMove(br.Left-range,br.Top+range);
        if not result then
          if prev.Y>=pt.Y then //moving up
-           result:=CanMove(br.Left+1,br.Top-1);
+           result:=CanMove(br.Left+range,br.Top-range);
        exit; //whether found or not, as this condition was true then all below cannot be
      end;
      if pt.X=br.Right-1 then //top-right
      begin //code logic repeated as above
-       result:=CanMove(br.Right,br.Top-1); //br.Right is really br.Right-1+1
+       result:=CanMove(br.Right-1+range,br.Top-range);
        if not result then
          if prev.X<=pt.X then //moving right
-           result:=CanMove(br.Right,br.Top+1); //same here for br.Right
+           result:=CanMove(br.Right-1+range,br.Top+range);
        if not result then
          if prev.Y>=pt.Y then //moving up
-           result:=CanMove(br.Right-2,br.Top-1);
+           result:=CanMove(br.Right-1-range,br.Top-range);
        exit; //save CPU cycles, the quicker we escape this code-block the better
      end;
      if prev.y>=pt.y then //top edge and moving up
-       result:=CanMove(pt.x,br.Top-1);
+       result:=CanMove(pt.x,br.Top-range);
      exit; //no more "tops" to check, quit now
    end;
    if pt.Y=br.Bottom-1 then //at bottom
    begin
      if pt.X=br.Left then //bottom-left
      begin
-       result:=CanMove(br.Left-1,br.Bottom); //br.Bottom is really -1+1
+       result:=CanMove(br.Left-range,br.Bottom-1+range);
        if not result then
          if prev.X>=pt.X then //moving left
-           result:=CanMove(br.Left-1,br.Bottom-1);
+           result:=CanMove(br.Left-range,br.Bottom-range);
        if not result then
          if prev.Y<=pt.Y then //moving down
-           result:=CanMove(br.Left+1,br.Bottom); //br.Bottom is really -1+1
+           result:=CanMove(br.Left+range,br.Bottom-1+range);
        exit;
      end;
      if pt.X=br.Right-1 then //bottom-right
      begin
-       result:=CanMove(br.Right,br.Bottom); //br.Right & br.Bottom is -1+1
+       result:=CanMove(br.Right-1+range,br.Bottom-1+range);
        if not result then
          if prev.X<=pt.X then //moving right
-           result:=CanMove(br.Right,br.Bottom-2);
+           result:=CanMove(br.Right-1+range,br.Bottom-1-range);
        if not result then
          if prev.Y<=pt.Y then //moving down
-           result:=CanMove(br.Right-2,br.Bottom);
+           result:=CanMove(br.Right-1-range,br.Bottom-1+range);
        exit;
      end; //end of all corner checks, now to check below
      if prev.y<=pt.y then //bottom edge and moving down
-       result:=CanMove(pt.x,br.Bottom); //br.Bottom-1+1
+       result:=CanMove(pt.x,br.Bottom-1+range);
      exit;
    end; //top and bottom covered its corners edges, so now only need to check sides
    if (pt.x=br.Right-1) and (prev.x<=pt.x) then //right edge and moving right
    begin //i am not checking if the mouse is dragging a window, just hop it anyway!
-     result:=CanMove(br.Right,pt.y); //br.Right+1-1
+     result:=CanMove(br.Right-1+range,pt.y);
      exit; //note this code could be done with a list of "if then else"
    end;    // instead of exits - but harder to read even if shorter
    if (pt.x=br.Left) and (prev.x>=pt.x) then //left edge and moving left
    begin
-     result:=CanMove(br.Left-1,pt.y);
+     result:=CanMove(br.Left-range,pt.y);
      exit; //Superfluous exit, but here in case more code goes in below
    end;
  end; //End CheckForMove
