@@ -30,6 +30,9 @@ This app checks the mouse position 1000 times a second and moves it onto the
      CPU usage is now about a 10th of what it was, if that!
      Rewrote the checking code, getting a tad more speed out of it.
      Also fixed a minor bug in the corner checking!
+9th May, 2018: -
+     Very small changes, biggest deal is changing the hop from 8 px down to 2.
+     The code changes were principally done to keep to the same as the debug version.
 
 This mouse... is clean.                                                       *)
 
@@ -39,12 +42,13 @@ uses
 var //save runtime stack & other overheads via global vars instead of passed params
   prev:TPoint; //stores where the mouse was last frame, so we can see what direction it's moving in
 
-procedure CheckMouse;
 const
-  hoplimit=30; //if delta greater than this in 1ms then is either computer controlled or will hop anyway!
+  hoplimit:integer=30; //if delta greater than this in 1ms then is either computer controlled or will hop anyway!
   range:integer=2; //casting about from mouse position this number of pixels
+
+procedure CheckMouse;
 var
-  pt:TPoint;  //where the mouse is, and where it's going to be!
+  pt:TPoint;  //where the mouse is, and where it's going!
   m:HMONITOR; //for quick access to the active monitor's dimensions
 
  function CheckForMove:boolean; //returns true when mouse has to move
@@ -71,6 +75,64 @@ var
   end; //End CanMove
 
  begin //Begin CheckForMove
+{
+//The Trevor special
+   if (pt.X=0) and (pt.Y<=113) then //top left
+   begin
+     pt.X:=-8;
+     pt.Y:=121;
+     result:=true;
+     exit;
+   end;
+   if (pt.X=0) and (pt.Y>=1193) then //bottom left
+   begin
+     pt.X:=-8;
+     pt.Y:=1185;
+     result:=true;
+     exit;
+   end;
+}
+{
+//Alice
+   if (pt.X=0) and (pt.Y<=205) then //top left
+   begin
+     pt.X:=-8;
+     pt.Y:=213;
+     result:=true;
+     exit;
+   end;
+   if (pt.X=0) and (pt.Y>=1285) then //bottom left
+   begin
+     pt.X:=-8;
+     pt.Y:=1277;
+     result:=true;
+     exit;
+   end;
+   if (pt.X=2559) and (pt.Y<=347) then //top right
+   begin
+     pt.X:=2567;
+     pt.Y:=355;
+     result:=true;
+     exit;
+   end;
+   if (pt.X=2559) and (pt.Y>=1115) then //bottom right
+   begin
+     pt.X:=2567;
+     pt.Y:=1107;
+     result:=true;
+     exit;
+   end;
+}
+{
+//Mine
+   if (pt.X=1279) and (pt.Y>=900) then //bottom left
+   begin
+     pt.X:=1280+range;
+     pt.Y:=900-range;
+     result:=true;
+     exit;
+   end;
+}
    //stochastic ability: it's not stuck in any corner, but see if it's approaching one
    result:=(pt.X-prev.X>-hoplimit) and (pt.X-prev.X<hoplimit) and //limit hop check range
            (pt.Y-prev.Y>-hoplimit) and (pt.Y-prev.Y<hoplimit) and // note short-circuit faster than abs()
