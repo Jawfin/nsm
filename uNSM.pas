@@ -217,8 +217,13 @@ end;
 
 procedure Tfrm.FormActivate(Sender: TObject);
 begin
+{$IFDEF FPC}
+  Hide; //hide this form
+  ShowInTaskBar:=stNever; //and remove off taskbar
+{$ELSE}
   ShowWindow(handle,sw_hide); //hide this form
   ShowWindow(application.handle,sw_hide); //and remove off taskbar
+{$ENDIF}
 end;
 
 end.
