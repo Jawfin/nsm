@@ -1,6 +1,7 @@
 ﻿
 
 using System;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Timers;
 using System.Windows;
@@ -9,185 +10,187 @@ using WpfScreenHelper;
 
 namespace NonStickMouse
 {
-    public static class NSM
+    public class NSM
     {
-        static Point prev; //stores where the mouse was last frame, so we can see what direction it's moving in
-        static Point pt; //where the mouse is, and where it's going!
-        static double rangex = 2; //casting about from mouse position this number of pixels in the x direction
-        static double rangey = 170; //casting about from mouse position this number of pixels in the y direction
-        static double hoplimit = 30; //if delta greater than this in 50ms  is either computer controlled or will hop anyway!
-        static Screen m = null; //for quick access to the active monitor's dimensions
-        static bool result = false;
-        static Rect br = Rect.Empty;
+        private Point _prev; //stores where the mouse was last frame, so we can see what direction it's moving in
+        private Point _pt; //where the mouse is, and where it's going!
+        private readonly double _rangeX = 2; //casting about from mouse position this number of pixels in the x direction
+        private readonly double _rangeY = 170; //casting about from mouse position this number of pixels in the y direction
+        private readonly double _hopLimit = 30; //if delta greater than this in 50ms  is either computer controlled or will hop anyway!
+        private Screen _m = null; //for quick access to the active monitor's dimensions
+        private bool _result = false;
+        private Rect _br = Rect.Empty;
         #region Imports
 
         [DllImport("User32.dll")]
         private static extern bool SetCursorPos(int X, int Y);
         #endregion
-        private static readonly Timer _timer = new Timer(10);
+        private readonly Timer _timer = new Timer(10);
 
-        static NSM()
+        public NSM(int rangeX = 2, int rangeY = 2, int hopLimit = 30)
         {
+            _rangeX = rangeX;
+            _rangeY = rangeY;
+            _hopLimit = hopLimit;
             _timer.Elapsed += Timer_Elapsed;
         }
 
-        public static void Start()
+        public void Start()
         {
             _timer.Start();
         }
 
-        private static void Timer_Elapsed(object sender, ElapsedEventArgs e)
+        private void Timer_Elapsed(object sender, ElapsedEventArgs e)
         {
             CheckMouse();
         }
 
-        static public void CheckMouse()
+        public void CheckMouse()
         {
-            pt = WpfScreenHelper.MouseHelper.MousePosition;
-            if (pt.X == prev.X && pt.Y == prev.Y)
+            _pt = WpfScreenHelper.MouseHelper.MousePosition;
+            if (_pt.X == _prev.X && _pt.Y == _prev.Y)
             {
                 return;
             }
 
-            m = Screen.FromPoint(pt);
-            if (m == null)
+            _m = Screen.FromPoint(_pt);
+            if (_m == null)
                 return;
             if (CheckForMove())
-                SetCursorPos((int) pt.X, (int) pt.Y);
-            prev = pt;
+                SetCursorPos((int)_pt.X, (int)_pt.Y);
+            _prev = _pt;
 
         }
 
-        static public bool CanMove(double x, double y)
+        public bool CanMove(double x, double y)
         {
-            result = false;
+            _result = false;
             Point dp = new Point(x, y); //storage of potential destination
             Screen dm = Screen.FromPoint(dp);
-            if (dm != null && dm.DeviceName != m?.DeviceName)
+            if (dm != null && dm.DeviceName != _m?.DeviceName)
             {
-                pt = dp;
-                result = true;
+                _pt = dp;
+                _result = true;
             }
 
-            return result;
+            return _result;
         }
 
-        static public bool CheckForMove()
+        public bool CheckForMove()
         {
             //stochastic ability: it's not stuck in any corner, but see if it's approaching one
-            result = (pt.X - prev.X > -hoplimit) && (pt.X - prev.X < hoplimit) && //limit hop check range
-                     (pt.Y - prev.Y > -hoplimit) &&
-                     (pt.Y - prev.Y < hoplimit) && // note short-circuit faster than abs()
-                     CanMove(pt.X * 2 - prev.X, pt.Y * 2 - prev.Y); //on it's given trajectory, will it cross a monitor?
-            if (result) //the check above will now cover almost all hops, but keep rest of code for completeness
-                return result;
+            _result = (_pt.X - _prev.X > -_hopLimit) && (_pt.X - _prev.X < _hopLimit) && //limit hop check range
+                     (_pt.Y - _prev.Y > -_hopLimit) &&
+                     (_pt.Y - _prev.Y < _hopLimit) && // note short-circuit faster than abs()
+                     CanMove(_pt.X * 2 - _prev.X, _pt.Y * 2 - _prev.Y); //on it's given trajectory, will it cross a monitor?
+            if (_result) //the check above will now cover almost all hops, but keep rest of code for completeness
+                return _result;
             //corner checks: check diagonal  horizonal  vertical.
-            br = m.Bounds; //get the bounds rectangle for the monitor
-            if (pt.Y == br.Top) //at top, do corners  check above
+            _br = _m.Bounds; //get the bounds rectangle for the monitor
+            if (_pt.Y == _br.Top) //at top, do corners  check above
             {
-                if (pt.X == br.Left) //top-left
+                if (_pt.X == _br.Left) //top-left
                 {
-                    result = CanMove(br.Left - rangex, br.Top - rangey); //check diagonal hop first
-                    if (!result)
+                    _result = CanMove(_br.Left - _rangeX, _br.Top - _rangeY); //check diagonal hop first
+                    if (!_result)
                     {
-                        if (prev.X >= pt.X) //moving left
-                            result = CanMove(br.Left - rangex, br.Top + rangey);
+                        if (_prev.X >= _pt.X) //moving left
+                            _result = CanMove(_br.Left - _rangeX, _br.Top + _rangeY);
                     }
 
-                    if (!result)
+                    if (!_result)
                     {
-                        if (prev.Y >= pt.Y) //moving up
+                        if (_prev.Y >= _pt.Y) //moving up
                         {
-                            result = CanMove(br.Left + rangex, br.Top - rangey);
-                            return result; //whether found or not, as this condition was true  all below cannot be
+                            _result = CanMove(_br.Left + _rangeX, _br.Top - _rangeY);
+                            return _result; //whether found or not, as this condition was true  all below cannot be
                         }
                     }
                 }
 
-                if (pt.X == br.Right - 1) //top-right
+                if (_pt.X == _br.Right - 1) //top-right
                 {
                     {
                         //code logic repeated as above
-                        result = CanMove(br.Right - 1 + rangex, br.Top - rangey);
-                        if (!result)
-                            if (prev.X <= pt.X) //moving right
-                                result = CanMove(br.Right - 1 + rangex, br.Top + rangey);
-                        if (!result)
-                            if (prev.Y >= pt.Y) //moving up
-                                result = CanMove(br.Right - 1 - rangex, br.Top - rangey);
-                        return result; //save CPU cycles, the quicker we escape this code-block the better
+                        _result = CanMove(_br.Right - 1 + _rangeX, _br.Top - _rangeY);
+                        if (!_result)
+                            if (_prev.X <= _pt.X) //moving right
+                                _result = CanMove(_br.Right - 1 + _rangeX, _br.Top + _rangeY);
+                        if (!_result)
+                            if (_prev.Y >= _pt.Y) //moving up
+                                _result = CanMove(_br.Right - 1 - _rangeX, _br.Top - _rangeY);
+                        return _result; //save CPU cycles, the quicker we escape this code-block the better
                     }
                     ;
                 }
 
-                if (prev.Y >= pt.Y) //top edge and moving up
+                if (_prev.Y >= _pt.Y) //top edge and moving up
                 {
-                    result = CanMove(pt.X, br.Top - rangey);
-                    return result; //no more "tops" to check, quit now}
+                    _result = CanMove(_pt.X, _br.Top - _rangeY);
+                    return _result; //no more "tops" to check, quit now}
                 }
             }
 
-            if (pt.Y == br.Bottom - 1) //at bottom
+            if (_pt.Y == _br.Bottom - 1) //at bottom
             {
 
-                if (pt.X == br.Left) //bottom-left
+                if (_pt.X == _br.Left) //bottom-left
                 {
-                    result = CanMove(br.Left - rangex, br.Bottom - 1 + rangey);
-                    if (!result)
-                        if (prev.X >= pt.X) //moving left
-                            result = CanMove(br.Left - rangex, br.Bottom - rangey);
-                    if (!result)
+                    _result = CanMove(_br.Left - _rangeX, _br.Bottom - 1 + _rangeY);
+                    if (!_result)
+                        if (_prev.X >= _pt.X) //moving left
+                            _result = CanMove(_br.Left - _rangeX, _br.Bottom - _rangeY);
+                    if (!_result)
                     {
-                        if (prev.Y <= pt.Y) //moving down
+                        if (_prev.Y <= _pt.Y) //moving down
                         {
-                            result = CanMove(br.Left + rangex, br.Bottom - 1 + rangey);
-                            return result;
+                            _result = CanMove(_br.Left + _rangeX, _br.Bottom - 1 + _rangeY);
+                            return _result;
                         }
                     }
                 }
 
-                if (pt.X == br.Right - 1) //bottom-right
+                if (_pt.X == _br.Right - 1) //bottom-right
                 {
-                    result = CanMove(br.Right - 1 + rangex, br.Bottom - 1 + rangey);
-                    if (!result)
+                    _result = CanMove(_br.Right - 1 + _rangeX, _br.Bottom - 1 + _rangeY);
+                    if (!_result)
                     {
-                        if (prev.X <= pt.X) //moving right
-                            result = CanMove(br.Right - 1 + rangex, br.Bottom - 1 - rangey);
-                        return result;
+                        if (_prev.X <= _pt.X) //moving right
+                            _result = CanMove(_br.Right - 1 + _rangeX, _br.Bottom - 1 - _rangeY);
+                        return _result;
                     }
 
-                    if (!result)
+                    if (!_result)
                     {
-                        if (prev.Y <= pt.Y) //moving down
+                        if (_prev.Y <= _pt.Y) //moving down
                         {
-                            result = CanMove(br.Right - 1 - rangex, br.Bottom - 1 + rangey);
-                            return result;
+                            _result = CanMove(_br.Right - 1 - _rangeX, _br.Bottom - 1 + _rangeY);
+                            return _result;
                         }
                     }
                 } //end of all corner checks, now to check below
 
-                if (prev.Y <= pt.Y) //bottom edge and moving down
+                if (_prev.Y <= _pt.Y) //bottom edge and moving down
                 {
-                    result = CanMove(pt.X, br.Bottom - 1 + rangey);
-                    return result;
+                    _result = CanMove(_pt.X, _br.Bottom - 1 + _rangeY);
+                    return _result;
                 }
             } //top and bottom covered its corners edges, so now only need to check sides
 
-            if ((pt.X == br.Right - 1) && (prev.X <= pt.X)) //right edge and moving right
+            if ((_pt.X == _br.Right - 1) && (_prev.X <= _pt.X)) //right edge and moving right
             {
                 //i am not checking if the mouse is dragging a window, just hop it anyway!
-                result = CanMove(br.Right - 1 + rangex, pt.Y);
-                return result; //note this code could be done with a list of "if  else"
+                _result = CanMove(_br.Right - 1 + _rangeX, _pt.Y);
+                return _result; //note this code could be done with a list of "if  else"
             } // instead of return results - but harder to read even if shorter
 
-            if ((pt.X == br.Left) && (prev.X >= pt.X)) //left edge and moving left
+            if ((_pt.X == _br.Left) && (_prev.X >= _pt.X)) //left edge and moving left
             {
-                result = CanMove(br.Left - rangex, pt.Y);
-                return result; //Superfluous return result, but here in case more code goes in below
+                _result = CanMove(_br.Left - _rangeX, _pt.Y);
+                return _result; //Superfluous return result, but here in case more code goes in below
             }
 
-            return result;
+            return _result;
         }
     }
-
-    }
+}
