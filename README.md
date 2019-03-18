@@ -1,4 +1,4 @@
-This is a solution I found for the mouse sticking when having monitors arranged vertically instead of horizontally and forked. I ported it to C# WPF and added commandline arguments e.g. NonStickMouse.exe --rangex=2 --rangey=2 --hoplimit=30
+This is a solution I found for the mouse sticking when having monitors arranged vertically instead of horizontally and forked. I ported it to C# WPF, split the range to be rangey and rangex to handle different monitor border sizes and added commandline arguments e.g. NonStickMouse.exe --rangex=2 --rangey=2 --hoplimit=30
 
 NSM Debug can be used to help you figure out the correct values for the arguments
 http://www.jawfin.net/download/NSMDebug.exe
