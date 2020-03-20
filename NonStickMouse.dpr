@@ -38,7 +38,9 @@ This app checks the mouse position 200 times a second and moves it onto the
      Stupid AVs are firing on the modaless version, so rewritten to use a
        dummy form which is hidden as soon as the app launches.
      Now the app is 3 files and the executable is 10 times original size >.<
-
+25th January, 2019: -
+     Recompiled this branch in Delphi 19 for DPI scaling issues.
+     App size change: 40KB  -->  400KB  -->  2MB (this)...
 
 This mouse... is clean.                                                       *)
 

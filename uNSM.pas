@@ -108,6 +108,14 @@ var
    end;
 }
 {
+//The Cameron Special - don't jump the mouse past the Show Desktop bar
+   if (pt.X>1914) and (pt.X<1920) and (pt.Y>1038) and (pt.Y<1080) then
+   begin
+     result:=false;
+     exit;
+   end;
+}
+{
 //Mine
    if (pt.X=1279) and (pt.Y>=900) then //bottom left
    begin
@@ -116,7 +124,7 @@ var
      result:=true;
      exit;
    end;
-}
+ }
    //stochastic ability: it's not stuck in any corner, but see if it's approaching one
    result:=(pt.X-prev.X>-hoplimit) and (pt.X-prev.X<hoplimit) and //limit hop check range
            (pt.Y-prev.Y>-hoplimit) and (pt.Y-prev.Y<hoplimit) and // note short-circuit faster than abs()

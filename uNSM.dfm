@@ -6,12 +6,12 @@ object frm: Tfrm
   Anchors = []
   BorderIcons = []
   BorderStyle = bsNone
-  ClientHeight = 0
+  ClientHeight = 240
   ClientWidth = 120
   Color = clWhite
   TransparentColor = True
   TransparentColorValue = clWhite
-  Constraints.MaxHeight = 39
+  Constraints.MaxHeight = 240
   Constraints.MaxWidth = 136
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
