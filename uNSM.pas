@@ -3,7 +3,7 @@ unit uNSM;
 interface
 
 uses
-  Windows, Forms, MultiMon, ExtCtrls, Classes;
+  Windows, Forms, MultiMon, ExtCtrls, Classes, SysUtils;
 
 type
   Tfrm = class(TForm)
@@ -25,22 +25,25 @@ implementation
 
 var //save runtime stack & other overheads via global vars instead of passed params
   prev:TPoint; //stores where the mouse was last frame, so we can see what direction it's moving in
-
+  corners:boolean; //command-line parameter: when true only hops at corners, ignores the monitors sides
+  lag:TDateTime; //command-line parameter: milliseconds to wait between firing, reduce toggling, default 0
+  lasthop:TDateTime; //for tracking the lag parameter
 const
   hoplimit:integer=30; //if delta greater than this in 50ms then is either computer controlled or will hop anyway!
   range:integer=2; //casting about from mouse position this number of pixels
 
 procedure CheckMouse;
 var
-  pt:TPoint;  //where the mouse is, and where it's going!
+  pt:TPoint; //where the mouse is, and where it's going!
   m:HMONITOR; //for quick access to the active monitor's dimensions
+  hop:boolean; //ties into lag parameter
 
  function CheckForMove:boolean; //returns true when mouse has to move
  {Pre:: m:HMONITOR; is initialised
  Post:: pt:TPoint; holds new mouse position
  This function is only called once, but not embedded so I can quickly "exit" the checks}
  var
-   mi:TMonitorInfo;  //get info for monitor's bounds
+   mi:TMonitorInfo; //get info for monitor's bounds
    br:TRect; //just an alias really
 
   function CanMove(x,y:integer):boolean; //tests if the new coords are sound,
@@ -125,16 +128,33 @@ var
      exit;
    end;
  }
+   result:=false;
+   if corners then //from the command-line, check if in corner
+   begin
+     mi.cbSize:=SizeOf(mi); //prepare destination data for next call
+     GetMonitorInfo(m,@mi); //get the bounds rectangle for the monitor
+     br:=mi.rcMonitor;
+     if not //comencify long corner checking thingy
+       ((((pt.Y>=br.Top-range) and (pt.Y<=br.Top+range)) or
+            ((pt.Y>=br.Bottom-range) and (pt.Y<=br.Bottom+range)))
+          and
+           (((pt.X>=br.Left-range) and (pt.X<=br.Left+range)) or
+            ((pt.X>=br.Right-range) and (pt.X<=br.Right+range)))) then
+       exit;
+   end;
    //stochastic ability: it's not stuck in any corner, but see if it's approaching one
    result:=(pt.X-prev.X>-hoplimit) and (pt.X-prev.X<hoplimit) and //limit hop check range
            (pt.Y-prev.Y>-hoplimit) and (pt.Y-prev.Y<hoplimit) and // note short-circuit faster than abs()
            CanMove(pt.X*2-prev.X,pt.Y*2-prev.Y); //on it's given trajectory, will it cross a monitor?
    if result then //the check above will now cover almost all hops, but keep rest of code for completeness
-     exit;
+     exit; //the quicker I can get out of this routine, the less CPU & memory used
+   if not corners then //these var haven't been loaded yet
+   begin
+     mi.cbSize:=SizeOf(mi); //code repeated as this is written for speed, not optimal coding methodology (not DRY)
+     GetMonitorInfo(m,@mi);
+     br:=mi.rcMonitor;
+   end;
    //corner checks: check diagonal then horizonal then vertical.
-   mi.cbSize:=SizeOf(mi); //prepare destination data for next call
-   GetMonitorInfo(m,@mi); //get the bounds rectangle for the monitor
-   br:=mi.rcMonitor; //check corners first, then edges.
    if pt.Y=br.Top then //at top, do corners then check above
    begin
      if pt.X=br.Left then //top-left
@@ -209,10 +229,20 @@ begin //Begin CheckMouse
     if (pt.X=prev.X) and (pt.Y=prev.Y) then //mouse not moving, don't check any further
       exit;
     m:=MonitorFromPoint(pt,MONITOR_DEFAULTTONULL); //what monitor our mouse is on?
-    if m=0 then //Danger, danger, Will Robinson.
+    if m=0 then //Danger, danger, Will Robinson. ("Lost in Space" reference, I mean literally ... nevermind!)
       exit;
     if CheckForMove then //draws from pt & m, and sets new pt if moving
-      SetCursorPos(pt.X,pt.Y); //something about the whole point of this application!
+    begin
+      hop:=true;
+      if lag>0 then //using the command-line parameter
+      begin
+        hop:=lasthop+lag<now;  //set back to false if too quick
+        if hop then
+          lasthop:=now;
+      end;
+      if hop then
+        SetCursorPos(pt.X,pt.Y); //something about the whole point of this application!
+    end;
     prev:=pt; //our current point, whether its original or where we placed it, is stored
   finally //user locked screen / logged out? or just some random unhappiness
   end;
@@ -234,5 +264,38 @@ begin
 {$ENDIF}
 end;
 
-end.
+procedure LoadCommandLineParameterValues;
+const
+  S_CORNERS='corners';  //command line parameters
+  S_LAG='lag';
+var
+  cl:string; //clean up the command-line string for easier parsing
+  i,l:integer;
+  lagmsecs:integer; //lag in milliseconds
+  lagstr:string; //to see if a value was provided
+begin
+  cl:=lowercase(GetCommandLine);
+  for i:=length(cl) downto 1 do
+    if not CharInSet(cl[i],['a'..'z','0'..'9']) then //remove all non alpha-numeric
+      Delete(cl,i,1);
+  corners:=pos(S_CORNERS,cl)>0; //the word corners is in the command line, set the flag
+  lagmsecs:=0;
+  l:=pos(S_LAG,cl);
+  if l>0 then
+  begin
+    lagstr:='';
+    for i:=l+Length(S_LAG) to Length(cl) do //see if 'lag' has a number after it
+      if CharInSet(cl[i],['0'..'9']) then
+        lagmsecs:=lagmsecs*10+Ord(cl[i])-Ord('0') //who's an old-school Pascal programmer then?
+      else
+        break; //on first non-number
+    if lagmsecs=0 then //no explit value set
+      lagmsecs:=500; //half a 'sec
+  end;
+  lag:=lagmsecs/24/60/60/1000; //hours, mins, secs, ms
+  lasthop:=0;
+end;
 
+initialization
+  LoadCommandLineParameterValues;
+end.
