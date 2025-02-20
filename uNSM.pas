@@ -1,4 +1,5 @@
 unit uNSM;
+//Backwardly compatible to Delphi 6 or older.
 
 interface
 
@@ -29,8 +30,8 @@ var //save runtime stack & other overheads via global vars instead of passed par
   lag:TDateTime; //command-line parameter: milliseconds to wait between firing, reduce toggling, default 0
   lasthop:TDateTime; //for tracking the lag parameter
 const
-  hoplimit:integer=30; //if delta greater than this in 50ms then is either computer controlled or will hop anyway!
-  range:integer=2; //casting about from mouse position this number of pixels
+  hoplimit:integer=0; //was 30. if delta greater than this in 50ms then is either computer controlled or will hop anyway!
+  range:integer=1; //was 2. casting about from mouse position this number of pixels
 
 procedure CheckMouse;
 var
@@ -127,7 +128,7 @@ var
      result:=true;
      exit;
    end;
- }
+}
    result:=false;
    if corners then //from the command-line, check if in corner
    begin
@@ -289,7 +290,7 @@ begin
         lagmsecs:=lagmsecs*10+Ord(cl[i])-Ord('0') //who's an old-school Pascal programmer then?
       else
         break; //on first non-number
-    if lagmsecs=0 then //no explit value set
+    if lagmsecs=0 then //no explicit value set
       lagmsecs:=500; //half a 'sec
   end;
   lag:=lagmsecs/24/60/60/1000; //hours, mins, secs, ms
