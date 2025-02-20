@@ -1,5 +1,5 @@
-program NonStickMouse;  { http://www.jawfin.net/nsm }                         (*
-Developed by Jonathan Barton to counter sticky corners and edges in Windows 10
+program NonStickMouse;  { https://jawfin.net/nsm }                         (*
+Developed by Jawfin to counter sticky corners and edges in Windows 10
 Original: 25th November, 2015
 This app checks the mouse position 200 times a second and moves it onto the
   next monitor when it is found to be stuck in a corner or on an edge.
@@ -41,6 +41,8 @@ This app checks the mouse position 200 times a second and moves it onto the
 25th January, 2019: -
      Recompiled this branch in Delphi 19 for DPI scaling issues.
      App size change: 40KB  -->  400KB  -->  2MB (this)...
+20th Feburary, 2025: -
+     No actual changes, just updated for latest compilers
 
 This mouse... is clean.                                                       *)
 
